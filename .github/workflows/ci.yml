@@ -1,0 +1,47 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ feature/devops ]
+  pull_request:
+    branches: [ feature/devops ]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build Docker image
+        run: |
+          docker build -t express-hello-world:${{ github.sha }} .
+
+      - name: Run container health check
+        run: |
+          docker run -d --name test-app -p 3001:3001 express-hello-world:${{ github.sha }}
+          sleep 10
+          docker logs test-app
+          docker stop test-app
+          docker rm test-app
+
+      - name: Notify success
+        if: success()
+        run: echo "CI Pipeline passed! Commit ${{ github.sha }} by ${{ github.actor }}"
+
+      - name: Notify failure
+        if: failure()
+        run: echo "CI Pipeline failed! Check logs for commit ${{ github.sha }}"
